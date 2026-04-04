@@ -20,12 +20,23 @@ function json(statusCode, body) {
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
+function storeOptions(name) {
+  const opts = { name, consistency: "strong" };
+  // When deployed via CLI (not Netlify CI), the Blobs context isn't auto-injected.
+  // Fall back to explicit credentials from env vars.
+  if (!process.env.NETLIFY_BLOBS_CONTEXT && process.env.NETLIFY_SITE_ID && process.env.NETLIFY_TOKEN) {
+    opts.siteID = process.env.NETLIFY_SITE_ID;
+    opts.token = process.env.NETLIFY_TOKEN;
+  }
+  return opts;
+}
+
 async function getMetaStore() {
-  return getStore({ name: "file-meta", consistency: "strong" });
+  return getStore(storeOptions("file-meta"));
 }
 
 async function getFileStore() {
-  return getStore({ name: "file-data", consistency: "strong" });
+  return getStore(storeOptions("file-data"));
 }
 
 async function loadMeta(store) {
