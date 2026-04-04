@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>File Share</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f5f5f5; color: #333; min-height: 100vh;
+    }
+    .container { max-width: 640px; margin: 0 auto; padding: 2rem 1rem; }
+    h1 { text-align: center; margin-bottom: 0.25rem; font-size: 1.5rem; }
+    .subtitle { text-align: center; color: #888; margin-bottom: 2rem; font-size: 0.9rem; }
+
+    /* Upload area */
+    .upload-area {
+      border: 2px dashed #ccc; border-radius: 12px; padding: 2.5rem 1rem;
+      text-align: center; cursor: pointer; transition: all 0.2s;
+      background: #fff; margin-bottom: 2rem;
+    }
+    .upload-area:hover, .upload-area.dragover {
+      border-color: #4a90d9; background: #f0f7ff;
+    }
+    .upload-area p { color: #666; margin-bottom: 0.5rem; }
+    .upload-area .hint { font-size: 0.8rem; color: #aaa; }
+    .upload-area input { display: none; }
+
+    /* Progress */
+    .progress-bar {
+      display: none; height: 6px; background: #e0e0e0; border-radius: 3px;
+      margin-top: 1rem; overflow: hidden;
+    }
+    .progress-bar .fill {
+      height: 100%; width: 0; background: #4a90d9; border-radius: 3px;
+      transition: width 0.3s;
+    }
+
+    /* File list */
+    .file-list { list-style: none; }
+    .file-item {
+      background: #fff; border-radius: 8px; padding: 1rem;
+      margin-bottom: 0.75rem; display: flex; align-items: center;
+      gap: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .file-icon {
+      width: 40px; height: 40px; border-radius: 8px; display: flex;
+      align-items: center; justify-content: center; font-size: 0.75rem;
+      font-weight: 700; color: #fff; flex-shrink: 0;
+    }
+    .file-icon.mp3 { background: #e67e22; }
+    .file-icon.pdf { background: #e74c3c; }
+    .file-info { flex: 1; min-width: 0; }
+    .file-name {
+      font-weight: 500; white-space: nowrap; overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .file-meta { font-size: 0.8rem; color: #999; margin-top: 0.15rem; }
+    .file-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+    .btn {
+      border: none; border-radius: 6px; padding: 0.4rem 0.75rem;
+      font-size: 0.8rem; cursor: pointer; transition: opacity 0.2s;
+    }
+    .btn:hover { opacity: 0.85; }
+    .btn-link { background: #4a90d9; color: #fff; }
+    .btn-dl { background: #27ae60; color: #fff; }
+    .btn-del { background: #e74c3c; color: #fff; }
+
+    /* Share view */
+    .share-view { text-align: center; background: #fff; border-radius: 12px; padding: 2.5rem 1.5rem; }
+    .share-view .file-icon { width: 64px; height: 64px; font-size: 1.2rem; margin: 0 auto 1rem; }
+    .share-view h2 { margin-bottom: 0.5rem; word-break: break-word; }
+    .share-view .file-meta { margin-bottom: 1.5rem; }
+    .share-view .btn { padding: 0.6rem 2rem; font-size: 1rem; }
+
+    .toast {
+      position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
+      background: #333; color: #fff; padding: 0.6rem 1.2rem; border-radius: 8px;
+      font-size: 0.85rem; opacity: 0; transition: opacity 0.3s; pointer-events: none;
+    }
+    .toast.show { opacity: 1; }
+    .empty { text-align: center; color: #aaa; padding: 2rem 0; }
+  </style>
+</head>
+<body>
+  <div class="container" id="app"></div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const app = document.getElementById("app");
+    const toast = document.getElementById("toast");
+    const isSharePage = location.pathname.startsWith("/share/");
+
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 2000);
+    }
+
+    function formatSize(bytes) {
+      if (bytes < 1024) return bytes + " B";
+      if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+      return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+    }
+
+    function fileExt(name) {
+      return name.split(".").pop().toLowerCase();
+    }
+
+    // --- Share Page ---
+    if (isSharePage) {
+      const id = location.pathname.split("/share/")[1];
+      fetch("/api/files")
+        .then(r => r.json())
+        .then(files => {
+          const file = files.find(f => f.id === id);
+          if (!file) {
+            app.innerHTML = `<div class="share-view"><h2>File not found</h2><p style="color:#999;margin-top:1rem">This link may have expired or the file was deleted.</p></div>`;
+            return;
+          }
+          const ext = fileExt(file.name);
+          app.innerHTML = `
+            <div class="share-view">
+              <div class="file-icon ${ext}">${ext.toUpperCase()}</div>
+              <h2>${escapeHtml(file.name)}</h2>
+              <div class="file-meta">${formatSize(file.size)}</div>
+              <a href="/api/download/${file.id}"><button class="btn btn-dl">Download</button></a>
+            </div>`;
+        })
+        .catch(() => {
+          app.innerHTML = `<div class="share-view"><h2>Error loading file</h2></div>`;
+        });
+    } else {
+      // --- Main Page ---
+      renderMain();
+    }
+
+    function escapeHtml(s) {
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function renderMain() {
+      app.innerHTML = `
+        <h1>File Share</h1>
+        <p class="subtitle">Upload MP3 or PDF files and share them with a link</p>
+        <div class="upload-area" id="dropzone">
+          <p>Drop files here or click to upload</p>
+          <span class="hint">MP3 and PDF only, max 50 MB</span>
+          <input type="file" id="fileInput" accept=".mp3,.pdf,audio/mpeg,application/pdf" multiple>
+          <div class="progress-bar" id="progress"><div class="fill" id="progressFill"></div></div>
+        </div>
+        <ul class="file-list" id="fileList"></ul>`;
+
+      const dropzone = document.getElementById("dropzone");
+      const fileInput = document.getElementById("fileInput");
+
+      dropzone.addEventListener("click", () => fileInput.click());
+      dropzone.addEventListener("dragover", e => { e.preventDefault(); dropzone.classList.add("dragover"); });
+      dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+      dropzone.addEventListener("drop", e => {
+        e.preventDefault(); dropzone.classList.remove("dragover");
+        handleFiles(e.dataTransfer.files);
+      });
+      fileInput.addEventListener("change", () => { handleFiles(fileInput.files); fileInput.value = ""; });
+
+      loadFiles();
+    }
+
+    async function handleFiles(fileList) {
+      for (const file of fileList) {
+        await uploadFile(file);
+      }
+      loadFiles();
+    }
+
+    function uploadFile(file) {
+      return new Promise(resolve => {
+        const form = new FormData();
+        form.append("file", file);
+        const xhr = new XMLHttpRequest();
+        const bar = document.getElementById("progress");
+        const fill = document.getElementById("progressFill");
+        bar.style.display = "block";
+        fill.style.width = "0%";
+
+        xhr.upload.onprogress = e => {
+          if (e.lengthComputable) fill.style.width = (e.loaded / e.total * 100) + "%";
+        };
+        xhr.onload = () => {
+          bar.style.display = "none";
+          if (xhr.status === 200) {
+            const data = JSON.parse(xhr.responseText);
+            showToast("Uploaded " + data.name);
+          } else {
+            try { showToast(JSON.parse(xhr.responseText).error); } catch { showToast("Upload failed"); }
+          }
+          resolve();
+        };
+        xhr.onerror = () => { bar.style.display = "none"; showToast("Upload failed"); resolve(); };
+        xhr.open("POST", "/api/upload");
+        xhr.send(form);
+      });
+    }
+
+    function loadFiles() {
+      fetch("/api/files").then(r => r.json()).then(files => {
+        const list = document.getElementById("fileList");
+        if (!list) return;
+        if (files.length === 0) {
+          list.innerHTML = '<li class="empty">No files uploaded yet</li>';
+          return;
+        }
+        list.innerHTML = files.map(f => {
+          const ext = fileExt(f.name);
+          return `
+            <li class="file-item">
+              <div class="file-icon ${ext}">${ext.toUpperCase()}</div>
+              <div class="file-info">
+                <div class="file-name">${escapeHtml(f.name)}</div>
+                <div class="file-meta">${formatSize(f.size)} &middot; ${new Date(f.uploadedAt).toLocaleDateString()}</div>
+              </div>
+              <div class="file-actions">
+                <button class="btn btn-link" onclick="copyLink('${f.id}')">Copy Link</button>
+                <a href="/api/download/${f.id}"><button class="btn btn-dl">DL</button></a>
+                <button class="btn btn-del" onclick="deleteFile('${f.id}')">Del</button>
+              </div>
+            </li>`;
+        }).join("");
+      });
+    }
+
+    function copyLink(id) {
+      const url = location.origin + "/share/" + id;
+      navigator.clipboard.writeText(url).then(() => showToast("Link copied!"));
+    }
+
+    function deleteFile(id) {
+      if (!confirm("Delete this file?")) return;
+      fetch("/api/files/" + id, { method: "DELETE" })
+        .then(r => r.json())
+        .then(() => { showToast("File deleted"); loadFiles(); });
+    }
+  </script>
+</body>
+</html>
