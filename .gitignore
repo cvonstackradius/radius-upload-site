@@ -2,3 +2,6 @@ node_modules
 uploads/*.mp3
 uploads/*.pdf
 uploads/meta.json
+
+# Local Netlify folder
+.netlify

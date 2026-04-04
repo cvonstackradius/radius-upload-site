@@ -3,22 +3,61 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>File Share</title>
+  <title>Radius File Share</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: #f5f5f5; color: #333; min-height: 100vh;
     }
-    .container { max-width: 640px; margin: 0 auto; padding: 2rem 1rem; }
-    h1 { text-align: center; margin-bottom: 0.25rem; font-size: 1.5rem; }
-    .subtitle { text-align: center; color: #888; margin-bottom: 2rem; font-size: 0.9rem; }
+    .container { max-width: 700px; margin: 0 auto; padding: 2rem 1rem; }
+
+    /* Login */
+    .login-wrapper {
+      display: flex; align-items: center; justify-content: center; min-height: 100vh;
+    }
+    .login-box {
+      background: #fff; border-radius: 12px; padding: 2.5rem 2rem;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1); width: 100%; max-width: 380px;
+    }
+    .login-box h1 { text-align: center; margin-bottom: 0.5rem; font-size: 1.5rem; }
+    .login-box .subtitle { text-align: center; color: #888; margin-bottom: 1.5rem; font-size: 0.9rem; }
+    .login-box label { display: block; font-size: 0.85rem; font-weight: 500; margin-bottom: 0.3rem; color: #555; }
+    .login-box input[type="text"],
+    .login-box input[type="password"] {
+      width: 100%; padding: 0.6rem 0.75rem; border: 1px solid #ddd; border-radius: 6px;
+      font-size: 0.95rem; margin-bottom: 1rem; outline: none; transition: border-color 0.2s;
+    }
+    .login-box input:focus { border-color: #4a90d9; }
+    .login-box .btn-login {
+      width: 100%; padding: 0.7rem; background: #4a90d9; color: #fff; border: none;
+      border-radius: 6px; font-size: 1rem; cursor: pointer; font-weight: 500;
+    }
+    .login-box .btn-login:hover { background: #3a7bc8; }
+    .login-error { color: #e74c3c; font-size: 0.85rem; text-align: center; margin-bottom: 1rem; display: none; }
+
+    /* Header */
+    .header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;
+    }
+    .header h1 { font-size: 1.5rem; }
+    .btn-logout {
+      background: #e74c3c; color: #fff; border: none; border-radius: 6px;
+      padding: 0.4rem 1rem; font-size: 0.85rem; cursor: pointer;
+    }
+    .btn-logout:hover { background: #c0392b; }
 
     /* Upload area */
+    .upload-section { margin-bottom: 2rem; }
+    .folder-input {
+      width: 100%; padding: 0.5rem 0.75rem; border: 1px solid #ddd; border-radius: 6px;
+      font-size: 0.9rem; margin-bottom: 0.75rem; outline: none;
+    }
+    .folder-input:focus { border-color: #4a90d9; }
     .upload-area {
       border: 2px dashed #ccc; border-radius: 12px; padding: 2.5rem 1rem;
       text-align: center; cursor: pointer; transition: all 0.2s;
-      background: #fff; margin-bottom: 2rem;
+      background: #fff;
     }
     .upload-area:hover, .upload-area.dragover {
       border-color: #4a90d9; background: #f0f7ff;
@@ -27,7 +66,6 @@
     .upload-area .hint { font-size: 0.8rem; color: #aaa; }
     .upload-area input { display: none; }
 
-    /* Progress */
     .progress-bar {
       display: none; height: 6px; background: #e0e0e0; border-radius: 3px;
       margin-top: 1rem; overflow: hidden;
@@ -38,41 +76,39 @@
     }
 
     /* File list */
+    .folder-group { margin-bottom: 1.5rem; }
+    .folder-heading {
+      font-size: 1rem; font-weight: 600; color: #555; margin-bottom: 0.5rem;
+      padding-bottom: 0.3rem; border-bottom: 1px solid #ddd;
+    }
     .file-list { list-style: none; }
     .file-item {
-      background: #fff; border-radius: 8px; padding: 1rem;
-      margin-bottom: 0.75rem; display: flex; align-items: center;
+      background: #fff; border-radius: 8px; padding: 0.85rem 1rem;
+      margin-bottom: 0.5rem; display: flex; align-items: center;
       gap: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06);
     }
     .file-icon {
-      width: 40px; height: 40px; border-radius: 8px; display: flex;
-      align-items: center; justify-content: center; font-size: 0.75rem;
+      width: 38px; height: 38px; border-radius: 8px; display: flex;
+      align-items: center; justify-content: center; font-size: 0.7rem;
       font-weight: 700; color: #fff; flex-shrink: 0;
     }
     .file-icon.mp3 { background: #e67e22; }
     .file-icon.pdf { background: #e74c3c; }
+    .file-icon.default { background: #7f8c8d; }
     .file-info { flex: 1; min-width: 0; }
     .file-name {
       font-weight: 500; white-space: nowrap; overflow: hidden;
-      text-overflow: ellipsis;
+      text-overflow: ellipsis; font-size: 0.9rem;
     }
-    .file-meta { font-size: 0.8rem; color: #999; margin-top: 0.15rem; }
-    .file-actions { display: flex; gap: 0.5rem; flex-shrink: 0; }
+    .file-meta { font-size: 0.78rem; color: #999; margin-top: 0.1rem; }
+    .file-actions { display: flex; gap: 0.4rem; flex-shrink: 0; }
     .btn {
-      border: none; border-radius: 6px; padding: 0.4rem 0.75rem;
-      font-size: 0.8rem; cursor: pointer; transition: opacity 0.2s;
+      border: none; border-radius: 6px; padding: 0.35rem 0.65rem;
+      font-size: 0.78rem; cursor: pointer; transition: opacity 0.2s; color: #fff;
     }
     .btn:hover { opacity: 0.85; }
-    .btn-link { background: #4a90d9; color: #fff; }
-    .btn-dl { background: #27ae60; color: #fff; }
-    .btn-del { background: #e74c3c; color: #fff; }
-
-    /* Share view */
-    .share-view { text-align: center; background: #fff; border-radius: 12px; padding: 2.5rem 1.5rem; }
-    .share-view .file-icon { width: 64px; height: 64px; font-size: 1.2rem; margin: 0 auto 1rem; }
-    .share-view h2 { margin-bottom: 0.5rem; word-break: break-word; }
-    .share-view .file-meta { margin-bottom: 1.5rem; }
-    .share-view .btn { padding: 0.6rem 2rem; font-size: 1rem; }
+    .btn-dl { background: #27ae60; }
+    .btn-del { background: #e74c3c; }
 
     .toast {
       position: fixed; bottom: 1.5rem; left: 50%; transform: translateX(-50%);
@@ -84,18 +120,22 @@
   </style>
 </head>
 <body>
-  <div class="container" id="app"></div>
+  <div id="root"></div>
   <div class="toast" id="toast"></div>
 
   <script>
-    const app = document.getElementById("app");
+    const root = document.getElementById("root");
     const toast = document.getElementById("toast");
-    const isSharePage = location.pathname.startsWith("/share/");
+    const AUTH_TOKEN = "vonstack-2026-token";
 
     function showToast(msg) {
       toast.textContent = msg;
       toast.classList.add("show");
-      setTimeout(() => toast.classList.remove("show"), 2000);
+      setTimeout(() => toast.classList.remove("show"), 2500);
+    }
+
+    function isLoggedIn() {
+      return localStorage.getItem("auth_token") === AUTH_TOKEN;
     }
 
     function formatSize(bytes) {
@@ -105,35 +145,7 @@
     }
 
     function fileExt(name) {
-      return name.split(".").pop().toLowerCase();
-    }
-
-    // --- Share Page ---
-    if (isSharePage) {
-      const id = location.pathname.split("/share/")[1];
-      fetch("/api/files")
-        .then(r => r.json())
-        .then(files => {
-          const file = files.find(f => f.id === id);
-          if (!file) {
-            app.innerHTML = `<div class="share-view"><h2>File not found</h2><p style="color:#999;margin-top:1rem">This link may have expired or the file was deleted.</p></div>`;
-            return;
-          }
-          const ext = fileExt(file.name);
-          app.innerHTML = `
-            <div class="share-view">
-              <div class="file-icon ${ext}">${ext.toUpperCase()}</div>
-              <h2>${escapeHtml(file.name)}</h2>
-              <div class="file-meta">${formatSize(file.size)}</div>
-              <a href="/api/download/${file.id}"><button class="btn btn-dl">Download</button></a>
-            </div>`;
-        })
-        .catch(() => {
-          app.innerHTML = `<div class="share-view"><h2>Error loading file</h2></div>`;
-        });
-    } else {
-      // --- Main Page ---
-      renderMain();
+      return (name.split(".").pop() || "").toLowerCase();
     }
 
     function escapeHtml(s) {
@@ -142,25 +154,85 @@
       return d.innerHTML;
     }
 
-    function renderMain() {
-      app.innerHTML = `
-        <h1>File Share</h1>
-        <p class="subtitle">Upload MP3 or PDF files and share them with a link</p>
-        <div class="upload-area" id="dropzone">
-          <p>Drop files here or click to upload</p>
-          <span class="hint">MP3 and PDF only, max 50 MB</span>
-          <input type="file" id="fileInput" accept=".mp3,.pdf,audio/mpeg,application/pdf" multiple>
-          <div class="progress-bar" id="progress"><div class="fill" id="progressFill"></div></div>
-        </div>
-        <ul class="file-list" id="fileList"></ul>`;
+    // --- Router ---
+    function init() {
+      if (!isLoggedIn()) {
+        renderLogin();
+      } else {
+        renderApp();
+      }
+    }
+
+    // --- Login ---
+    function renderLogin() {
+      root.innerHTML = `
+        <div class="login-wrapper">
+          <div class="login-box">
+            <h1>Radius File Share</h1>
+            <p class="subtitle">Sign in to continue</p>
+            <div class="login-error" id="loginError">Invalid username or password</div>
+            <label for="username">Username</label>
+            <input type="text" id="username" autocomplete="username" placeholder="Username">
+            <label for="password">Password</label>
+            <input type="password" id="password" autocomplete="current-password" placeholder="Password">
+            <button class="btn-login" id="loginBtn">Sign In</button>
+          </div>
+        </div>`;
+
+      const loginBtn = document.getElementById("loginBtn");
+      const usernameInput = document.getElementById("username");
+      const passwordInput = document.getElementById("password");
+      const loginError = document.getElementById("loginError");
+
+      function doLogin() {
+        const u = usernameInput.value.trim();
+        const p = passwordInput.value;
+        if (u === "vonstack" && p === "2026") {
+          localStorage.setItem("auth_token", AUTH_TOKEN);
+          init();
+        } else {
+          loginError.style.display = "block";
+        }
+      }
+
+      loginBtn.addEventListener("click", doLogin);
+      passwordInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") doLogin();
+      });
+    }
+
+    // --- Main App ---
+    function renderApp() {
+      root.innerHTML = `
+        <div class="container">
+          <div class="header">
+            <h1>Radius File Share</h1>
+            <button class="btn-logout" id="logoutBtn">Logout</button>
+          </div>
+          <div class="upload-section">
+            <input type="text" class="folder-input" id="folderInput" placeholder="Folder (optional, defaults to root)">
+            <div class="upload-area" id="dropzone">
+              <p>Drop files here or click to upload</p>
+              <span class="hint">Any file type, max 50 MB</span>
+              <input type="file" id="fileInput" multiple>
+              <div class="progress-bar" id="progress"><div class="fill" id="progressFill"></div></div>
+            </div>
+          </div>
+          <div id="fileListContainer"></div>
+        </div>`;
+
+      document.getElementById("logoutBtn").addEventListener("click", () => {
+        localStorage.removeItem("auth_token");
+        init();
+      });
 
       const dropzone = document.getElementById("dropzone");
       const fileInput = document.getElementById("fileInput");
 
       dropzone.addEventListener("click", () => fileInput.click());
-      dropzone.addEventListener("dragover", e => { e.preventDefault(); dropzone.classList.add("dragover"); });
+      dropzone.addEventListener("dragover", (e) => { e.preventDefault(); dropzone.classList.add("dragover"); });
       dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
-      dropzone.addEventListener("drop", e => {
+      dropzone.addEventListener("drop", (e) => {
         e.preventDefault(); dropzone.classList.remove("dragover");
         handleFiles(e.dataTransfer.files);
       });
@@ -170,23 +242,26 @@
     }
 
     async function handleFiles(fileList) {
+      const folder = document.getElementById("folderInput").value.trim() || "root";
       for (const file of fileList) {
-        await uploadFile(file);
+        await uploadFile(file, folder);
       }
       loadFiles();
     }
 
-    function uploadFile(file) {
-      return new Promise(resolve => {
+    function uploadFile(file, folder) {
+      return new Promise((resolve) => {
         const form = new FormData();
         form.append("file", file);
+        form.append("folder", folder);
+
         const xhr = new XMLHttpRequest();
         const bar = document.getElementById("progress");
         const fill = document.getElementById("progressFill");
         bar.style.display = "block";
         fill.style.width = "0%";
 
-        xhr.upload.onprogress = e => {
+        xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) fill.style.width = (e.loaded / e.total * 100) + "%";
         };
         xhr.onload = () => {
@@ -206,43 +281,76 @@
     }
 
     function loadFiles() {
-      fetch("/api/files").then(r => r.json()).then(files => {
-        const list = document.getElementById("fileList");
-        if (!list) return;
-        if (files.length === 0) {
-          list.innerHTML = '<li class="empty">No files uploaded yet</li>';
-          return;
-        }
-        list.innerHTML = files.map(f => {
-          const ext = fileExt(f.name);
-          return `
-            <li class="file-item">
-              <div class="file-icon ${ext}">${ext.toUpperCase()}</div>
-              <div class="file-info">
-                <div class="file-name">${escapeHtml(f.name)}</div>
-                <div class="file-meta">${formatSize(f.size)} &middot; ${new Date(f.uploadedAt).toLocaleDateString()}</div>
-              </div>
-              <div class="file-actions">
-                <button class="btn btn-link" onclick="copyLink('${f.id}')">Copy Link</button>
-                <a href="/api/download/${f.id}"><button class="btn btn-dl">DL</button></a>
-                <button class="btn btn-del" onclick="deleteFile('${f.id}')">Del</button>
-              </div>
-            </li>`;
-        }).join("");
-      });
+      fetch("/api/files")
+        .then((r) => r.json())
+        .then((files) => {
+          const container = document.getElementById("fileListContainer");
+          if (!container) return;
+
+          if (!files || files.length === 0) {
+            container.innerHTML = '<p class="empty">No files uploaded yet</p>';
+            return;
+          }
+
+          // Group by folder
+          const folders = {};
+          files.forEach((f) => {
+            const folder = f.folder || "root";
+            if (!folders[folder]) folders[folder] = [];
+            folders[folder].push(f);
+          });
+
+          // Sort folder names, but put "root" first
+          const folderNames = Object.keys(folders).sort((a, b) => {
+            if (a === "root") return -1;
+            if (b === "root") return 1;
+            return a.localeCompare(b);
+          });
+
+          let html = "";
+          folderNames.forEach((folderName) => {
+            html += `<div class="folder-group">`;
+            html += `<div class="folder-heading">${escapeHtml(folderName === "root" ? "Root" : folderName)}</div>`;
+            html += `<ul class="file-list">`;
+            folders[folderName].forEach((f) => {
+              const ext = fileExt(f.originalName);
+              const iconClass = (ext === "mp3" || ext === "pdf") ? ext : "default";
+              const metaKey = `meta/${f.folder}/${f.id}`;
+              const downloadUrl = `/api/download?key=${encodeURIComponent(f.fileKey)}`;
+              html += `
+                <li class="file-item">
+                  <div class="file-icon ${iconClass}">${ext.toUpperCase() || "FILE"}</div>
+                  <div class="file-info">
+                    <div class="file-name">${escapeHtml(f.originalName)}</div>
+                    <div class="file-meta">${formatSize(f.size)} &middot; ${new Date(f.uploadedAt).toLocaleDateString()}</div>
+                  </div>
+                  <div class="file-actions">
+                    <a href="${downloadUrl}"><button class="btn btn-dl">Download</button></a>
+                    <button class="btn btn-del" onclick="deleteFile('${escapeHtml(metaKey)}')">Delete</button>
+                  </div>
+                </li>`;
+            });
+            html += `</ul></div>`;
+          });
+
+          container.innerHTML = html;
+        })
+        .catch(() => {
+          const container = document.getElementById("fileListContainer");
+          if (container) container.innerHTML = '<p class="empty">Failed to load files</p>';
+        });
     }
 
-    function copyLink(id) {
-      const url = location.origin + "/share/" + id;
-      navigator.clipboard.writeText(url).then(() => showToast("Link copied!"));
-    }
-
-    function deleteFile(id) {
+    function deleteFile(metaKey) {
       if (!confirm("Delete this file?")) return;
-      fetch("/api/files/" + id, { method: "DELETE" })
-        .then(r => r.json())
-        .then(() => { showToast("File deleted"); loadFiles(); });
+      fetch(`/api/delete?key=${encodeURIComponent(metaKey)}`, { method: "DELETE" })
+        .then((r) => r.json())
+        .then(() => { showToast("File deleted"); loadFiles(); })
+        .catch(() => showToast("Delete failed"));
     }
+
+    // Start
+    init();
   </script>
 </body>
 </html>
