@@ -14,18 +14,52 @@
     h1 { text-align: center; margin-bottom: 0.25rem; font-size: 1.5rem; }
     .subtitle { text-align: center; color: #888; margin-bottom: 2rem; font-size: 0.9rem; }
 
+    /* Login */
+    .login-box {
+      background: #fff; border-radius: 12px; padding: 2.5rem 1.5rem;
+      max-width: 360px; margin: 4rem auto; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .login-box h1 { margin-bottom: 1.5rem; }
+    .login-box input {
+      display: block; width: 100%; padding: 0.6rem 0.8rem; margin-bottom: 1rem;
+      border: 1px solid #ddd; border-radius: 6px; font-size: 0.95rem;
+    }
+    .login-box button {
+      width: 100%; padding: 0.7rem; background: #4a90d9; color: #fff;
+      border: none; border-radius: 6px; font-size: 1rem; cursor: pointer;
+    }
+    .login-box button:hover { opacity: 0.9; }
+    .login-error { color: #e74c3c; font-size: 0.85rem; margin-bottom: 0.75rem; display: none; }
+    .logout-btn {
+      background: none; border: 1px solid #ccc; border-radius: 6px;
+      padding: 0.3rem 0.75rem; font-size: 0.8rem; cursor: pointer; color: #666;
+      float: right;
+    }
+    .logout-btn:hover { background: #f0f0f0; }
+
     /* Upload area */
     .upload-area {
       border: 2px dashed #ccc; border-radius: 12px; padding: 2.5rem 1rem;
       text-align: center; cursor: pointer; transition: all 0.2s;
-      background: #fff; margin-bottom: 2rem;
+      background: #fff; margin-bottom: 1rem;
     }
     .upload-area:hover, .upload-area.dragover {
       border-color: #4a90d9; background: #f0f7ff;
     }
     .upload-area p { color: #666; margin-bottom: 0.5rem; }
     .upload-area .hint { font-size: 0.8rem; color: #aaa; }
-    .upload-area input { display: none; }
+    .upload-area input[type="file"] { display: none; }
+
+    .folder-input {
+      display: flex; gap: 0.5rem; align-items: center; margin-bottom: 2rem;
+      background: #fff; padding: 0.6rem 1rem; border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .folder-input label { font-size: 0.85rem; color: #666; white-space: nowrap; }
+    .folder-input input {
+      flex: 1; border: 1px solid #ddd; border-radius: 6px;
+      padding: 0.4rem 0.6rem; font-size: 0.85rem;
+    }
 
     /* Progress */
     .progress-bar {
@@ -35,6 +69,13 @@
     .progress-bar .fill {
       height: 100%; width: 0; background: #4a90d9; border-radius: 3px;
       transition: width 0.3s;
+    }
+
+    /* Folder groups */
+    .folder-group { margin-bottom: 1.5rem; }
+    .folder-header {
+      font-size: 0.85rem; font-weight: 600; color: #555; padding: 0.4rem 0;
+      margin-bottom: 0.5rem; border-bottom: 1px solid #e0e0e0;
     }
 
     /* File list */
@@ -92,6 +133,15 @@
     const toast = document.getElementById("toast");
     const isSharePage = location.pathname.startsWith("/share/");
 
+    function getToken() { return localStorage.getItem("auth_token"); }
+    function setToken(t) { localStorage.setItem("auth_token", t); }
+    function clearToken() { localStorage.removeItem("auth_token"); }
+
+    function authHeaders() {
+      const t = getToken();
+      return t ? { "Authorization": "Bearer " + t } : {};
+    }
+
     function showToast(msg) {
       toast.textContent = msg;
       toast.classList.add("show");
@@ -108,42 +158,77 @@
       return name.split(".").pop().toLowerCase();
     }
 
-    // --- Share Page ---
-    if (isSharePage) {
-      const id = location.pathname.split("/share/")[1];
-      fetch("/api/files")
-        .then(r => r.json())
-        .then(files => {
-          const file = files.find(f => f.id === id);
-          if (!file) {
-            app.innerHTML = `<div class="share-view"><h2>File not found</h2><p style="color:#999;margin-top:1rem">This link may have expired or the file was deleted.</p></div>`;
-            return;
-          }
-          const ext = fileExt(file.name);
-          app.innerHTML = `
-            <div class="share-view">
-              <div class="file-icon ${ext}">${ext.toUpperCase()}</div>
-              <h2>${escapeHtml(file.name)}</h2>
-              <div class="file-meta">${formatSize(file.size)}</div>
-              <a href="/api/download/${file.id}"><button class="btn btn-dl">Download</button></a>
-            </div>`;
-        })
-        .catch(() => {
-          app.innerHTML = `<div class="share-view"><h2>Error loading file</h2></div>`;
-        });
-    } else {
-      // --- Main Page ---
-      renderMain();
-    }
-
     function escapeHtml(s) {
       const d = document.createElement("div");
       d.textContent = s;
       return d.innerHTML;
     }
 
+    // --- Share Page (public, no auth needed for download) ---
+    if (isSharePage) {
+      const id = location.pathname.split("/share/")[1];
+      // Share page: try to fetch file info; download link is public
+      app.innerHTML = `
+        <div class="share-view">
+          <h2>Shared File</h2>
+          <div class="file-meta">Loading...</div>
+          <a href="/api/download/${encodeURIComponent(id)}"><button class="btn btn-dl">Download</button></a>
+        </div>`;
+    } else {
+      // --- Main App ---
+      if (getToken()) {
+        renderMain();
+      } else {
+        renderLogin();
+      }
+    }
+
+    // --- Login ---
+    function renderLogin() {
+      app.innerHTML = `
+        <div class="login-box">
+          <h1>File Share</h1>
+          <div class="login-error" id="loginError">Invalid username or password</div>
+          <input type="text" id="username" placeholder="Username" autocomplete="username">
+          <input type="password" id="password" placeholder="Password" autocomplete="current-password">
+          <button id="loginBtn">Log In</button>
+        </div>`;
+
+      document.getElementById("loginBtn").addEventListener("click", doLogin);
+      document.getElementById("password").addEventListener("keydown", e => {
+        if (e.key === "Enter") doLogin();
+      });
+    }
+
+    async function doLogin() {
+      const username = document.getElementById("username").value;
+      const password = document.getElementById("password").value;
+      const errEl = document.getElementById("loginError");
+      errEl.style.display = "none";
+
+      try {
+        const res = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password }),
+        });
+        const data = await res.json();
+        if (res.ok && data.token) {
+          setToken(data.token);
+          renderMain();
+        } else {
+          errEl.style.display = "block";
+        }
+      } catch {
+        errEl.textContent = "Connection error";
+        errEl.style.display = "block";
+      }
+    }
+
+    // --- Main Page ---
     function renderMain() {
       app.innerHTML = `
+        <button class="logout-btn" id="logoutBtn">Log out</button>
         <h1>File Share</h1>
         <p class="subtitle">Upload MP3 or PDF files and share them with a link</p>
         <div class="upload-area" id="dropzone">
@@ -152,7 +237,16 @@
           <input type="file" id="fileInput" accept=".mp3,.pdf,audio/mpeg,application/pdf" multiple>
           <div class="progress-bar" id="progress"><div class="fill" id="progressFill"></div></div>
         </div>
-        <ul class="file-list" id="fileList"></ul>`;
+        <div class="folder-input">
+          <label for="folderName">Folder:</label>
+          <input type="text" id="folderName" placeholder="(none)">
+        </div>
+        <div id="fileListContainer"></div>`;
+
+      document.getElementById("logoutBtn").addEventListener("click", () => {
+        clearToken();
+        renderLogin();
+      });
 
       const dropzone = document.getElementById("dropzone");
       const fileInput = document.getElementById("fileInput");
@@ -180,6 +274,9 @@
       return new Promise(resolve => {
         const form = new FormData();
         form.append("file", file);
+        const folder = document.getElementById("folderName")?.value || "";
+        if (folder) form.append("folder", folder);
+
         const xhr = new XMLHttpRequest();
         const bar = document.getElementById("progress");
         const fill = document.getElementById("progressFill");
@@ -194,6 +291,10 @@
           if (xhr.status === 200) {
             const data = JSON.parse(xhr.responseText);
             showToast("Uploaded " + data.name);
+          } else if (xhr.status === 401) {
+            clearToken();
+            renderLogin();
+            showToast("Session expired");
           } else {
             try { showToast(JSON.parse(xhr.responseText).error); } catch { showToast("Upload failed"); }
           }
@@ -201,35 +302,68 @@
         };
         xhr.onerror = () => { bar.style.display = "none"; showToast("Upload failed"); resolve(); };
         xhr.open("POST", "/api/upload");
+        xhr.setRequestHeader("Authorization", "Bearer " + getToken());
         xhr.send(form);
       });
     }
 
     function loadFiles() {
-      fetch("/api/files").then(r => r.json()).then(files => {
-        const list = document.getElementById("fileList");
-        if (!list) return;
-        if (files.length === 0) {
-          list.innerHTML = '<li class="empty">No files uploaded yet</li>';
-          return;
-        }
-        list.innerHTML = files.map(f => {
-          const ext = fileExt(f.name);
-          return `
-            <li class="file-item">
-              <div class="file-icon ${ext}">${ext.toUpperCase()}</div>
-              <div class="file-info">
-                <div class="file-name">${escapeHtml(f.name)}</div>
-                <div class="file-meta">${formatSize(f.size)} &middot; ${new Date(f.uploadedAt).toLocaleDateString()}</div>
-              </div>
-              <div class="file-actions">
-                <button class="btn btn-link" onclick="copyLink('${f.id}')">Copy Link</button>
-                <a href="/api/download/${f.id}"><button class="btn btn-dl">DL</button></a>
-                <button class="btn btn-del" onclick="deleteFile('${f.id}')">Del</button>
-              </div>
-            </li>`;
-        }).join("");
-      });
+      fetch("/api/files", { headers: authHeaders() })
+        .then(r => {
+          if (r.status === 401) { clearToken(); renderLogin(); showToast("Session expired"); return null; }
+          return r.json();
+        })
+        .then(files => {
+          if (!files) return;
+          const container = document.getElementById("fileListContainer");
+          if (!container) return;
+
+          if (files.length === 0) {
+            container.innerHTML = '<ul class="file-list"><li class="empty">No files uploaded yet</li></ul>';
+            return;
+          }
+
+          // Group by folder
+          const grouped = {};
+          files.forEach(f => {
+            const folder = f.folder || "(No folder)";
+            if (!grouped[folder]) grouped[folder] = [];
+            grouped[folder].push(f);
+          });
+
+          const folderNames = Object.keys(grouped).sort((a, b) => {
+            if (a === "(No folder)") return 1;
+            if (b === "(No folder)") return -1;
+            return a.localeCompare(b);
+          });
+
+          let html = "";
+          for (const folder of folderNames) {
+            html += `<div class="folder-group">`;
+            if (folderNames.length > 1 || folder !== "(No folder)") {
+              html += `<div class="folder-header">${escapeHtml(folder)}</div>`;
+            }
+            html += `<ul class="file-list">`;
+            html += grouped[folder].map(f => {
+              const ext = fileExt(f.name);
+              return `
+                <li class="file-item">
+                  <div class="file-icon ${ext}">${ext.toUpperCase()}</div>
+                  <div class="file-info">
+                    <div class="file-name">${escapeHtml(f.name)}</div>
+                    <div class="file-meta">${formatSize(f.size)} &middot; ${new Date(f.uploadedAt).toLocaleDateString()}</div>
+                  </div>
+                  <div class="file-actions">
+                    <button class="btn btn-link" onclick="copyLink('${f.id}')">Copy Link</button>
+                    <a href="/api/download/${f.id}"><button class="btn btn-dl">DL</button></a>
+                    <button class="btn btn-del" onclick="deleteFile('${f.id}')">Del</button>
+                  </div>
+                </li>`;
+            }).join("");
+            html += `</ul></div>`;
+          }
+          container.innerHTML = html;
+        });
     }
 
     function copyLink(id) {
@@ -239,9 +373,12 @@
 
     function deleteFile(id) {
       if (!confirm("Delete this file?")) return;
-      fetch("/api/files/" + id, { method: "DELETE" })
-        .then(r => r.json())
-        .then(() => { showToast("File deleted"); loadFiles(); });
+      fetch("/api/files/" + id, { method: "DELETE", headers: authHeaders() })
+        .then(r => {
+          if (r.status === 401) { clearToken(); renderLogin(); showToast("Session expired"); return null; }
+          return r.json();
+        })
+        .then(data => { if (data) { showToast("File deleted"); loadFiles(); } });
     }
   </script>
 </body>
