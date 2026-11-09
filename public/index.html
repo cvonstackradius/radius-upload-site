@@ -104,6 +104,21 @@
       return (bytes / (1024 * 1024)).toFixed(1) + " MB";
     }
 
+    // Admin key for upload/list/delete, asked once per browser tab.
+    function adminKey() {
+      let k = null;
+      try { k = sessionStorage.getItem("uploadAdminKey"); } catch (e) {}
+      if (!k) {
+        k = prompt("Admin key") || "";
+        try { sessionStorage.setItem("uploadAdminKey", k); } catch (e) {}
+      }
+      return k;
+    }
+    function forgetKey() { try { sessionStorage.removeItem("uploadAdminKey"); } catch (e) {} }
+    function adminFetch(url, opts = {}) {
+      opts.headers = Object.assign({}, opts.headers, { "X-Admin-Key": adminKey() });
+      return fetch(url, opts).then(r => { if (r.status === 401) { forgetKey(); showToast("Wrong admin key"); throw new Error("401"); } return r; });
+    }
     function fileExt(name) {
       return name.split(".").pop().toLowerCase();
     }
@@ -111,10 +126,9 @@
     // --- Share Page ---
     if (isSharePage) {
       const id = location.pathname.split("/share/")[1];
-      fetch("/api/files")
-        .then(r => r.json())
-        .then(files => {
-          const file = files.find(f => f.id === id);
+      fetch("/api/files/" + encodeURIComponent(id))
+        .then(r => r.ok ? r.json() : null)
+        .then(file => {
           if (!file) {
             app.innerHTML = `<div class="share-view"><h2>File not found</h2><p style="color:#999;margin-top:1rem">This link may have expired or the file was deleted.</p></div>`;
             return;
@@ -201,12 +215,13 @@
         };
         xhr.onerror = () => { bar.style.display = "none"; showToast("Upload failed"); resolve(); };
         xhr.open("POST", "/api/upload");
+        xhr.setRequestHeader("X-Admin-Key", adminKey());
         xhr.send(form);
       });
     }
 
     function loadFiles() {
-      fetch("/api/files").then(r => r.json()).then(files => {
+      adminFetch("/api/files").then(r => r.json()).then(files => {
         const list = document.getElementById("fileList");
         if (!list) return;
         if (files.length === 0) {
@@ -239,7 +254,7 @@
 
     function deleteFile(id) {
       if (!confirm("Delete this file?")) return;
-      fetch("/api/files/" + id, { method: "DELETE" })
+      adminFetch("/api/files/" + id, { method: "DELETE" })
         .then(r => r.json())
         .then(() => { showToast("File deleted"); loadFiles(); });
     }
