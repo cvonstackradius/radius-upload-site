@@ -4,7 +4,21 @@ const path = require("path");
 const fs = require("fs");
 const { v4: uuidv4 } = require("uuid");
 
+const crypto = require("crypto");
+
 const app = express();
+
+// Uploading, listing and deleting require UPLOAD_ADMIN_KEY (sent as the
+// X-Admin-Key header). Share links (/share/<id>, /api/download/<id>) stay
+// open to whoever has the unguessable link. With no key set, admin is locked.
+const ADMIN_KEY = (process.env.UPLOAD_ADMIN_KEY || "").trim();
+function requireAdmin(req, res, next) {
+  const got = String(req.get("X-Admin-Key") || "");
+  const ok = ADMIN_KEY && got.length === ADMIN_KEY.length &&
+    crypto.timingSafeEqual(Buffer.from(got), Buffer.from(ADMIN_KEY));
+  if (!ok) return res.status(401).json({ error: "Unauthorized" });
+  next();
+}
 const PORT = process.env.PORT || 3000;
 
 const UPLOADS_DIR = path.join(__dirname, "..", "uploads");
@@ -52,7 +66,7 @@ const upload = multer({
 app.use(express.static(path.join(__dirname, "..", "public")));
 
 // Upload endpoint
-app.post("/api/upload", (req, res) => {
+app.post("/api/upload", requireAdmin, (req, res) => {
   upload.single("file")(req, res, (err) => {
     if (err) {
       const message =
@@ -82,7 +96,7 @@ app.post("/api/upload", (req, res) => {
 });
 
 // List files
-app.get("/api/files", (_req, res) => {
+app.get("/api/files", requireAdmin, (_req, res) => {
   const meta = loadMeta();
   const files = Object.entries(meta).map(([id, info]) => ({
     id,
@@ -96,7 +110,7 @@ app.get("/api/files", (_req, res) => {
 });
 
 // Delete file
-app.delete("/api/files/:id", (req, res) => {
+app.delete("/api/files/:id", requireAdmin, (req, res) => {
   const meta = loadMeta();
   const info = meta[req.params.id];
   if (!info) return res.status(404).json({ error: "File not found" });
@@ -106,6 +120,13 @@ app.delete("/api/files/:id", (req, res) => {
   delete meta[req.params.id];
   saveMeta(meta);
   res.json({ ok: true });
+});
+
+// Public info for one shared file (used by the share page)
+app.get("/api/files/:id", (req, res) => {
+  const info = loadMeta()[req.params.id];
+  if (!info) return res.status(404).json({ error: "File not found" });
+  res.json({ id: req.params.id, name: info.originalName, size: info.size, type: info.mimetype, uploadedAt: info.uploadedAt });
 });
 
 // Download endpoint
